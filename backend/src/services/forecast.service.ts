@@ -3,52 +3,80 @@ import { generateGrid } from "./grid.service";
 import { classifyStorm } from "./stormClassifier.service";
 import { StormCell } from "../models/storm.model";
 
-let cachedData: StormCell[] = [];
-let lastUpdated: number | null = null;
+let forecastCache: StormCell[] = [];
+
+// Adjustable tuning
+const STEP_DELAY_MS = 1000;        // delay between chunk requests
+const CHUNK_SIZE = 300;           // number of points per request
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function refreshForecast() {
-  const grid = generateGrid();
-  const results: StormCell[] = [];
-
-  const latitudes = grid.map(p => p.lat).join(",");
-  const longitudes = grid.map(p => p.lon).join(",");
-
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitudes}&longitude=${longitudes}&hourly=temperature_2m,precipitation,snowfall&forecast_days=1`;
-
   try {
-    const response = await axios.get(url);
-    const dataArray = response.data;
+    console.log("Refreshing forecast...");
 
-    dataArray.forEach((locationData: any, index: number) => {
-      const hourly = locationData.hourly;
+    const grid = generateGrid();
+    const results: StormCell[] = [];
 
-      const temp = hourly.temperature_2m[0];
-      const precipitation = hourly.precipitation[0];
-      const snowfall = hourly.snowfall[0];
+    for (let i = 0; i < grid.length; i += CHUNK_SIZE) {
+      const chunk = grid.slice(i, i + CHUNK_SIZE);
 
-      const type = classifyStorm(temp, precipitation, snowfall);
+      const latitudes = chunk.map(p => p.lat).join(",");
+      const longitudes = chunk.map(p => p.lon).join(",");
 
-      if (type) {
-        results.push({
-          lat: grid[index].lat,
-          lon: grid[index].lon,
-          type,
-          intensity: precipitation
-        });
-      }
-    });
+      const url =
+        `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${latitudes}` +
+        `&longitude=${longitudes}` +
+        `&hourly=temperature_2m,precipitation,snowfall,cloudcover,wind_speed_10m` +
+        `&forecast_days=1`;
 
-    cachedData = results;
-    lastUpdated = Date.now();
+      const response = await axios.get(url);
 
-    console.log("Forecast refreshed:", new Date().toISOString());
+      const locations = response.data;
 
-  } catch (err: any) {
-    console.error("Forecast refresh failed");
-    console.error(err.response?.data || err.message);
+      locations.forEach((locationData: any, index: number) => {
+        const hourly = locationData.hourly;
+
+        const temp = hourly.temperature_2m[0];
+        const precipitation = hourly.precipitation[0];
+        const snowfall = hourly.snowfall[0];
+        const cloudCover = hourly.cloudcover[0];
+        const windSpeed = hourly.wind_speed_10m[0];
+
+        const type = classifyStorm(
+          temp,
+          precipitation,
+          snowfall,
+          cloudCover,
+          windSpeed
+        );
+
+        if (type) {
+          results.push({
+            lat: chunk[index].lat,
+            lon: chunk[index].lon,
+            type,
+            intensity: precipitation
+          });
+        }
+      });
+
+      // prevent 429
+      await sleep(STEP_DELAY_MS);
+    }
+
+    forecastCache = results;
+    console.log(`Forecast updated: ${results.length} weather cells`);
+
+  } catch (error) {
+    console.error("Forecast refresh failed", error);
   }
 }
 
+// Route-safe snapshot (NO API CALLS HERE)
 export function getForecastSnapshot(): StormCell[] {
-  return cachedData;
+  return forecastCache;
 }

@@ -10,6 +10,7 @@ setInterval(() => {
   refreshForecast();
 }, 15 * 60 * 1000); // every 15 minutes
 
+
 dotenv.config();
 
 const app = express();

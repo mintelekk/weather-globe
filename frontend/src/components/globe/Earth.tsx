@@ -1,11 +1,14 @@
 import { useLoader } from "@react-three/fiber";
 import * as THREE from "three";
+import { useEffect } from "react";
 
-export default function Earth({ sunDirection }: any) {
+export default function Earth({ sunDirection, fullLight }: any) {
   const dayTexture = useLoader(
     THREE.TextureLoader,
-    "https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg"
+    "https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/earthmap1k.jpg"
+
   );
+
 
   const nightTexture = useLoader(
     THREE.TextureLoader,
@@ -16,7 +19,8 @@ export default function Earth({ sunDirection }: any) {
     uniforms: {
       dayMap: { value: dayTexture },
       nightMap: { value: nightTexture },
-      sunDirection: { value: sunDirection }
+      sunDirection: { value: sunDirection },
+      fullLight: { value: fullLight ? 1.0 : 0.0 }
     },
     vertexShader: `
       varying vec2 vUv;
@@ -35,7 +39,7 @@ export default function Earth({ sunDirection }: any) {
       uniform sampler2D dayMap;
       uniform sampler2D nightMap;
       uniform vec3 sunDirection;
-
+      uniform float fullLight;
       varying vec2 vUv;
       varying vec3 vWorldNormal;
 
@@ -47,15 +51,29 @@ export default function Earth({ sunDirection }: any) {
 
         float mixFactor = smoothstep(-0.2, 0.2, light);
 
-        gl_FragColor = mix(nightColor, dayColor, mixFactor);
+        // If fullLight enabled, force daylight everywhere
+        if (fullLight > 0.5) {
+          gl_FragColor = dayColor;
+        } else {
+          gl_FragColor = mix(nightColor, dayColor, mixFactor);
+        }
+
       }
     `
   });
+  useEffect(() => {
+    material.uniforms.fullLight.value = fullLight ? 1.0 : 0.0;
+  }, [fullLight]);
 
+  // 🔥 This is where useEffect goes
+  useEffect(() => {
+    material.uniforms.sunDirection.value = sunDirection;
+  }, [sunDirection, material]);
   return (
     <mesh rotation={[0, Math.PI / 2, 0]}>
-      <sphereGeometry args={[3, 64, 64]} />
+      <sphereGeometry args={[4, 64, 64]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
+  
 }

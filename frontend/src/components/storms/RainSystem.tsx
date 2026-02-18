@@ -15,8 +15,8 @@ function latLonToVector3(lat: number, lon: number, radius: number) {
     radius * Math.sin(phi) * Math.sin(theta)
   );
 }
-const EARTH_RADIUS = 3;
-const STORM_RADIUS = EARTH_RADIUS + 0.05;
+const EARTH_RADIUS = 4;
+const STORM_RADIUS = EARTH_RADIUS + 0.2;
 
 export default function RainSystem({ storms }: Props) {
   const positions = storms.map(s =>

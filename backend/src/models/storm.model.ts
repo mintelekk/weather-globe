@@ -1,6 +1,6 @@
 export interface StormCell {
   lat: number;
   lon: number;
-  type: "rain" | "snow" | null;
+  type: "cloud" | "rain" | "snow" | "storm" | null;
   intensity: number;
 }
